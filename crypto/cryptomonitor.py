@@ -1,7 +1,7 @@
 from binance import BinanceSocketManager, AsyncClient  # ThreadedWebsocketManager
 import asyncio
 import time
-from typing import List
+from typing import List, Tuple
 from decimal import Decimal
 import database
 import traceback
@@ -94,37 +94,41 @@ class Call:
         from bot import CryptoCallBot
         bot = CryptoCallBot.GetInstance()
 
-        await bot.SendMessage(f"{comment}\n\n{self.GetOverview()}")
+        await bot.SendMessage(self.GetOverview(comment))
 
-    async def __ActivateTriggered(self, klineData) -> bool:
+    async def __ActivateTriggered(self, klineData) -> Tuple[bool, str]:
+        if klineData['high'] < self.__dbCall.entryPrice:
+            # We pay less for the call than we expected
+            entryPrice = klineData['high']
+        else:
+            entryPrice = self.__dbCall.entryPrice
         self.__dbCall.activatedAt = klineData['time']
         self.__dbCall.amount = self.__dbCall.investment / self.__dbCall.entryPrice
+        self.__dbCall.entryPrice = entryPrice
+        self.__dbCall.investment = self.__dbCall.amount * entryPrice
         self.__dbCall.result = -self.__dbCall.investment
         self.__dbCall.status = database.CryptoCall.Status.ACTIVE
         await self.Save()
 
-        await self.__SendMessage(f"Call {self.__dbCall.id} buy in at ₮ {DecimalToString(self.entryPrice)}.")
-        return True
+        return True, f"Buy in at ₮ {DecimalToString(self.entryPrice)}."
 
-    async def __StopLossTriggered(self, klineData) -> bool:
+    async def __StopLossTriggered(self, klineData) -> Tuple[bool, str]:
         self.__dbCall.status = database.CryptoCall.Status.CLOSED
         self.__dbCall.result += self.__dbCall.amount * self.__dbCall.stopLoss
         self.__dbCall.amount = Decimal("0.0")
         self.__dbCall.stopLossTriggered = klineData['time']
         self.__dbCall.closedAt = klineData['time']
         await self.Save()
-        await self.__SendMessage(f"Call {self.__dbCall.id} closed by stop loss.")
-        return False
+        return False, f"Call {self.__dbCall.id} closed by stop loss."
 
-    async def __TargetTriggered(self, dbTakeProfit, klineData) -> bool:
+    async def __TargetTriggered(self, dbTakeProfit, klineData) -> Tuple[bool, str]:
         dbTakeProfit.triggeredAt = klineData['time']
         self.__dbCall.amount -= dbTakeProfit.amount
         dbTakeProfit.result = dbTakeProfit.amount * \
             (dbTakeProfit.targetPrice - self.__dbCall.entryPrice)
         self.__dbCall.result += dbTakeProfit.amount * dbTakeProfit.targetPrice
         await self.Save()
-        await self.__SendMessage(f"Take profit ₮ {DecimalToString(dbTakeProfit.targetPrice)} triggered.")
-        return True
+        return True, f"Take profit ₮ {DecimalToString(dbTakeProfit.targetPrice)} triggered."
 
     async def Update(self, klineData) -> bool:
         """
@@ -135,20 +139,25 @@ class Call:
             print(f"Call {self.__dbCall.id} is already closed.")
             return False
 
+        retVal = True
+        messages = []
         self.price = klineData['close']
         if self.__dbCall.status == database.CryptoCall.Status.ACQUIRING:
             if klineData['low'] <= self.__dbCall.entryPrice:
-                await self.__ActivateTriggered(klineData)
+                retVal, message = await self.__ActivateTriggered(klineData)
+                messages.append(message)
 
         if self.__dbCall.status == database.CryptoCall.Status.ACTIVE:
             if klineData['low'] <= self.__dbCall.stopLoss:
-                return await self.__StopLossTriggered(klineData)
+                retVal, message = await self.__StopLossTriggered(klineData)
+                messages.append(message)
             else:
                 nrOfOpenTakeProfits = 0
                 for tp in self.__dbTakeProfits:
                     if tp.triggeredAt is None:
-                        if  klineData['high'] >= tp.targetPrice:
-                            await self.__TargetTriggered(tp, klineData)
+                        if klineData['high'] >= tp.targetPrice:
+                            retVal, message = await self.__TargetTriggered(tp, klineData)
+                            messages.append(message)
                         else:
                             nrOfOpenTakeProfits += 1
 
@@ -156,11 +165,14 @@ class Call:
                     self.__dbCall.status = database.CryptoCall.Status.CLOSED
                     self.__dbCall.closedAt = klineData['time']
                     await self.Save()
-                    await self.__SendMessage(f"Call {self.__dbCall.id} closed as all target prices have been reached.")
-                    return False
-        return True
+                    retVal = False
+                    messages.append("Closed as all target prices have been reached.")
 
-    def GetOverview(self) -> str:
+        if messages:
+            await self.__SendMessage("\n".join(messages))
+        return retVal
+
+    def GetOverview(self, message="") -> str:
         """Get a string overview of the call."""
 
         firstColumnWidth = 11
@@ -186,6 +198,8 @@ class Call:
 
         totalResult = self.result + self.value
         comment = f"Call {self.__dbCall.id}: {'🟩' if totalResult >= 0 else '🟥'} ₮ {DecimalToString(totalResult)}"
+        if message:
+            comment += f"\n{message}"
         return f"""{comment}
 ```
 {divider}
