@@ -67,8 +67,25 @@ class Call:
         Cancel the call and update the database.
         """
         self.__dbCall.status = database.CryptoCall.Status.CLOSED
+        self.__dbCall.closedAt = datetime.now()
         await self.Save()
         print(f"Cancelled call {self.__dbCall.id}")
+
+    async def Close(self):
+        """
+        Close the call and update the database.
+        """
+        if self.__dbCall.status == database.CryptoCall.Status.CLOSED:
+            print(f"Call {self.__dbCall.id} is already closed.")
+            return
+
+        if self.__dbCall.status == database.CryptoCall.Status.ACTIVE:
+            self.__dbCall.result += self.__dbCall.amount * self.price
+            self.__dbCall.amount = Decimal("0.0")
+        self.__dbCall.status = database.CryptoCall.Status.CLOSED
+        self.__dbCall.closedAt = datetime.now()
+        await self.Save()
+        await self.__SendMessage(f"Call {self.__dbCall.id} closed at ₮ {DecimalToString(self.price)}.")
 
     async def __SendMessage(self, comment: str):
         """
@@ -91,8 +108,7 @@ class Call:
 
     async def __StopLossTriggered(self, klineData) -> bool:
         self.__dbCall.status = database.CryptoCall.Status.CLOSED
-        self.__dbCall.result += self.__dbCall.amount * \
-            (self.__dbCall.stopLoss - self.__dbCall.entryPrice)
+        self.__dbCall.result += self.__dbCall.amount * self.__dbCall.stopLoss
         self.__dbCall.amount = Decimal("0.0")
         self.__dbCall.stopLossTriggered = klineData['time']
         self.__dbCall.closedAt = klineData['time']
@@ -119,12 +135,11 @@ class Call:
             print(f"Call {self.__dbCall.id} is already closed.")
             return False
 
+        self.price = klineData['close']
         if self.__dbCall.status == database.CryptoCall.Status.ACQUIRING:
             if klineData['low'] <= self.__dbCall.entryPrice:
                 await self.__ActivateTriggered(klineData)
-                return True
 
-        self.price = klineData['close']
         if self.__dbCall.status == database.CryptoCall.Status.ACTIVE:
             if klineData['low'] <= self.__dbCall.stopLoss:
                 return await self.__StopLossTriggered(klineData)
@@ -271,18 +286,14 @@ class CryptoMonitor:
     async def Initialize(self):
         self.__client = await AsyncClient.create()
         self.__bsm = BinanceSocketManager(self.__client)
+        self.__running = True
         await self.__LoadOpenCalls()
-        self.__task = asyncio.create_task(self.__Run())
 
     async def Stop(self):
         self.__running = False
-        if self.__task is not None:
-            self.__task.cancel()
-            try:
-                await self.__task
-            except asyncio.CancelledError:
-                pass
-            self.__task = None
+        for pairData in self.__openCalls.copy().values():
+            if pairData['task'] is not None:
+                pairData['task'].cancel()
 
         if self.__bsm is not None:
             self.__bsm = None
@@ -290,7 +301,7 @@ class CryptoMonitor:
             await self.__client.close_connection()
             self.__client = None
 
-    async def __HandleKline(self, pairData, msg):
+    async def __HandleKline(self, pairData, msg) -> bool:
         # {'t': 1745691180000,
         #  'T': 1745691239999,
         #  's': 'BTCUSDT',
@@ -308,6 +319,7 @@ class CryptoMonitor:
         #  'V': '0.18833000',
         #  'Q': '17759.71510360',
         #  'B': '0'}
+        active = True
         if msg and msg['e'] == 'kline' and msg['k']['x'] == True:
             k = msg['k']
             klineData = { "low": Decimal(k['l']),
@@ -324,28 +336,23 @@ class CryptoMonitor:
             for call in callsToRemove:
                 pairData['calls'].remove(call)
                 if len(pairData['calls']) == 0:
-                    await pairData['socket'].close()
-                    pairData['socket'] = None
-                    del self.__openCalls[pairData['pair']]
-                    print(f"Closed all calls for {pairData['pair']}")
+                    active = False
+        return active
 
-    async def __ReceiveKlines(self):
-        for pair, pairData in self.__openCalls.items():
-            if pairData['socket'] is not None:
-                async with pairData['socket'] as stream:
-                    msg = await stream.recv()
-                    await self.__HandleKline(pairData, msg)
-
-    async def __Run(self):
-        self.__running = True
-        while self.__running:
-            if self.__openCalls:
+    async def __ReceiveKlines(self, pair):
+        pairData = self.__openCalls[pair]
+        running = True
+        async with pairData['socket'] as stream:
+            while self.__running and running:
                 try:
-                    await self.__ReceiveKlines()
+                    msg = await stream.recv()
+                    if not await self.__HandleKline(pairData, msg):
+                        running = False
                 except Exception:
                     traceback.print_exc()
-            else:
-                await asyncio.sleep(1)
+
+        del self.__openCalls[pair]
+        print(f"Closed all calls for {pair}")
 
     async def __RegisterCall(self, call: Call):
         binancePair = await self.__CheckPair(call.pair)
@@ -353,8 +360,9 @@ class CryptoMonitor:
             self.__openCalls[binancePair]['calls'].append(call)
         else:
             socket = self.__bsm.kline_socket(symbol=binancePair, interval=AsyncClient.KLINE_INTERVAL_1MINUTE)
-            self.__openCalls[binancePair] = {
-                'calls': [call], 'pair': binancePair, 'socket': socket}
+            await socket.connect()
+            self.__openCalls[binancePair] = {'calls': [call], 'pair': binancePair, 'socket': socket, 'task': None}
+            self.__openCalls[binancePair]['task'] = asyncio.create_task(self.__ReceiveKlines(binancePair))
             print(f"Registered call for {binancePair}")
 
 
@@ -415,3 +423,12 @@ class CryptoMonitor:
             except ValueError:
                 call.Cancel()
         print(f"Loaded {len(openCalls)} open calls.")
+
+    async def CloseCall(self, callId: int):
+        """
+        Close a call by its ID.
+        """
+        call = await self.Get(callId)
+        if call is None:
+            raise ValueError(f"Call with ID {callId} not found.")
+        await call.Close()
