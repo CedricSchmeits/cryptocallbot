@@ -176,7 +176,7 @@ class Call:
         """Get a string overview of the call."""
 
         firstColumnWidth = 11
-        secondColumnWidth = 26
+        secondColumnWidth = 25
         separator = "|"
         divider = f"{separator}{'-' * (firstColumnWidth + 2)}{separator}{'-' * (secondColumnWidth + 2)}{separator}"
         takeProfits = ""
