@@ -67,7 +67,8 @@ class CryptoCallBot:
         except Exception as e:
             print(f"Error deleting message: {e}")
 
-        await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Welcome to the Crypto Call Bot!\n{"\n".join(self.__methodDocumentation.values())}"),
+        docText = '\n'.join(self.__methodDocumentation.values())
+        await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Welcome to the Crypto Call Bot!\n{docText}"),
                                         parse_mode=ParseMode.MARKDOWN_V2)
 
     async def UpdateCall(self, call: Call, reason: str) -> None:

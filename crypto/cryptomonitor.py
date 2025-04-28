@@ -119,7 +119,7 @@ class Call:
         self.__dbCall.stopLossTriggered = klineData['time']
         self.__dbCall.closedAt = klineData['time']
         await self.Save()
-        return False, f"Call {self.__dbCall.id} closed by stop loss."
+        return False, f"Closed by stop loss."
 
     async def __TargetTriggered(self, dbTakeProfit, klineData) -> Tuple[bool, str]:
         dbTakeProfit.triggeredAt = klineData['time']
@@ -197,7 +197,9 @@ class Call:
             status += " (Stop Loss)"
 
         totalResult = self.result + self.value
-        comment = f"Call {self.__dbCall.id}: {'🟩' if totalResult >= 0 else '🟥'} ₮ {DecimalToString(totalResult)}"
+        percentage = (totalResult / self.investment) * 100
+        percentage = f"{percentage:.2f}%"
+        comment = f"Call {self.__dbCall.id}: {'🟩' if totalResult >= 0 else '🟥'} ₮ {DecimalToString(totalResult)} {percentage}"
         if message:
             comment += f"\n{message}"
         return f"""{comment}
