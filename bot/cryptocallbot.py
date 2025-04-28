@@ -17,7 +17,7 @@ class CryptoCallBot:
     __singelton = None
     __methodDocumentation = {
         "call": """/addcall <pair> <entry> <stoploss> <take_profit> [<take_profit2> ...]
-  Create a new crypto call. The bot will send a message to the group with the call details.
+  Create a new crypto call. The bot will send a message to the group with the call details. As buy in amount ₮ 100 is used.
    • <pair> - The crypto pair to trade (e.g., BTC/USDT)
    • <entry> - The entry price for the trade
    • <stoploss> - The stop loss price for the trade can be a percentage or a entry price

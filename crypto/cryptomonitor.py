@@ -175,7 +175,7 @@ class Call:
     def GetOverview(self, message="") -> str:
         """Get a string overview of the call."""
 
-        firstColumnWidth = 11
+        firstColumnWidth = 13
         secondColumnWidth = 25
         separator = "|"
         divider = f"{separator}{'-' * (firstColumnWidth + 2)}{separator}{'-' * (secondColumnWidth + 2)}{separator}"
@@ -202,21 +202,22 @@ class Call:
         comment = f"Call {self.__dbCall.id}: {'🟩' if totalResult >= 0 else '🟥'} ₮ {DecimalToString(totalResult)} {percentage}"
         if message:
             comment += f"\n{message}"
+
         return f"""{comment}
 ```
 {divider}
-| Call ID     | {str(self.id).ljust(secondColumnWidth)} |
-| Pair        | {str(self.pair).ljust(secondColumnWidth)} |
-| Status      | {status.ljust(secondColumnWidth)} |
-| Entry Price | ₮ {DecimalToString(self.entryPrice).ljust(secondColumnWidth - 2)} |
-| Stop Loss   | ₮ {DecimalToString(self.stopLoss).ljust(secondColumnWidth - 2)} |
-| Investment  | ₮ {DecimalToString(self.investment).ljust(secondColumnWidth - 2)} |
-| Remaining   | {DecimalToString(self.amount).ljust(secondColumnWidth)} |
-| Price*      | ₮ {DecimalToString(self.price).ljust(secondColumnWidth - 2)} |
-| Value*      | ₮ {DecimalToString(self.value).ljust(secondColumnWidth - 2)} |
-| Result*     | ₮ {DecimalToString(totalResult).ljust(secondColumnWidth - 2)} |
+| Call ID       | {str(self.id).ljust(secondColumnWidth)} |
+| Pair          | {str(self.pair).ljust(secondColumnWidth)} |
+| Status        | {status.ljust(secondColumnWidth)} |
+| Entry Price   | ₮ {DecimalToString(self.entryPrice).ljust(secondColumnWidth - 2)} |
+| Stop Loss     | ₮ {DecimalToString(self.stopLoss).ljust(secondColumnWidth - 2)} |
+| Investment    | ₮ {DecimalToString(self.investment).ljust(secondColumnWidth - 2)} |
+| Amount Coins  | {DecimalToString(self.amount).ljust(secondColumnWidth)} |
+| Current Price | ₮ {DecimalToString(self.price).ljust(secondColumnWidth - 2)} |
+| Current Value | ₮ {DecimalToString(self.value).ljust(secondColumnWidth - 2)} |
+| Result*       | ₮ {DecimalToString(totalResult).ljust(secondColumnWidth - 2)} |
 {divider}
-| Profits     | {str("").ljust(secondColumnWidth)} |{takeProfits}
+| Profits       | {str("").ljust(secondColumnWidth)} |{takeProfits}
 {divider}
 ```
 """
