@@ -399,8 +399,9 @@ class  CryptoExchange:
                 for ohlcv in msg:
                     if not await self.__HandleOhlcv(pairData, ohlcv):
                         running = False
-            except Exception:
-                traceback.print_exc()
+            except Exception as e:
+                print(f"Error watching OHLCV for {pair}: {e}")
+                await asyncio.sleep(5)
 
         try:
             if self.__running and hasattr(self.__exchange, 'unWatchOHLCV'):
