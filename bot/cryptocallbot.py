@@ -18,6 +18,7 @@ class CryptoCallBot:
     __methodDocumentation = {
         "call": """/addcall <pair> <entry> <stoploss> <take_profit> [<take_profit2> ...]
   Create a new crypto call. The bot will send a message to the group with the call details. As buy in amount ₮ 100 is used.
+   • <exchange> - The exchange to use (e.g., binance)
    • <pair> - The crypto pair to trade (e.g., BTC/USDT)
    • <entry> - The entry price for the trade
    • <stoploss> - The stop loss price for the trade can be a percentage or a entry price
@@ -89,18 +90,19 @@ class CryptoCallBot:
             return
 
         try:
-            pair = context.args[0]
-            entryPrice = Decimal(context.args[1])
-            stopLoss = context.args[2]
+            exchange = context.args[0]
+            pair = context.args[1]
+            entryPrice = Decimal(context.args[2])
+            stopLoss = context.args[3]
             if stopLoss.endswith('%'):
                 stopLoss = entryPrice * (1 - Decimal(stopLoss[:-1]) / 100)
             else:
                 stopLoss = Decimal(stopLoss)
 
-            nrOfTakeProfits = len(context.args) - 3
+            nrOfTakeProfits = len(context.args) - 4
             takeProfits = []
             for i in range(nrOfTakeProfits):
-                targetPrice = context.args[i + 3]
+                targetPrice = context.args[i + 4]
                 if "@" in targetPrice:
                     batchSize, targetPrice = targetPrice.split("@")
                     batchSize = Decimal(batchSize) / 100
@@ -116,7 +118,7 @@ class CryptoCallBot:
                 takeProfits.append(
                     {"targetPrice": targetPrice, "size": batchSize})
 
-            call = await self.__monitor.AddCall(pair, entryPrice, stopLoss, takeProfits)
+            call = await self.__monitor.AddCall(exchange, pair, entryPrice, stopLoss, takeProfits)
             await update.message.reply_text(BotSettings.EscapeMarkdownV2(call.GetOverview()),
                                             parse_mode=ParseMode.MARKDOWN_V2)
         except ValueError as e:
@@ -142,7 +144,7 @@ class CryptoCallBot:
                 except ValueError:
                     await update.message.reply_text("Invalid call ID.")
             else:
-                openCalls = await self.__monitor.GetOpenCalls()
+                openCalls = self.__monitor.GetOpenCalls()
                 if not openCalls:
                     msg = "No open calls."
                 else:

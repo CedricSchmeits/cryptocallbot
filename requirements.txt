@@ -1,4 +1,4 @@
 python-telegram-bot
-python-binance
 aiomysql
 python-dotenv
+ccxt

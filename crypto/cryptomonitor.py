@@ -1,4 +1,5 @@
-from binance import BinanceSocketManager, AsyncClient  # ThreadedWebsocketManager
+#from binance import BinanceSocketManager, AsyncClient  # ThreadedWebsocketManager
+import ccxt.pro as ccxt
 import asyncio
 import time
 from typing import List, Tuple
@@ -18,8 +19,9 @@ class Call:
         self.__price = Decimal("0.0")
 
     @classmethod
-    async def Create(cls, pair: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
+    async def Create(cls, pair: str, exchange: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
         dbCall = await database.CryptoCall.Insert(pair=pair,
+                                                  exchange=exchange,
                                                   entryPrice=entryPrice,
                                                   stopLoss=stopLoss)
         dbTakeProfits = []
@@ -55,7 +57,7 @@ class Call:
         return openCalls
 
     def __repr__(self):
-        return f"<Call id={self.__dbCall.id} pair={self.__dbCall.pair} entryPrice={self.__dbCall.entryPrice} stopLoss={self.__dbCall.stopLoss} investment={self.__dbCall.investment} amount={self.__dbCall.amount} result={self.__dbCall.result} status={self.__dbCall.status}>"
+        return f"<Call id={self.__dbCall.id} exchange={self.exchange} pair={self.__dbCall.pair} entryPrice={self.__dbCall.entryPrice} stopLoss={self.__dbCall.stopLoss} investment={self.__dbCall.investment} amount={self.__dbCall.amount} result={self.__dbCall.result} status={self.__dbCall.status}>"
 
     async def Save(self):
         await self.__dbCall.Save()
@@ -176,9 +178,7 @@ class Call:
         """Get a string overview of the call."""
 
         firstColumnWidth = 13
-        secondColumnWidth = 25
-        separator = "|"
-        divider = f"{separator}{'-' * (firstColumnWidth + 2)}{separator}{'-' * (secondColumnWidth + 2)}{separator}"
+
         takeProfits = ""
         for tp in self.__dbTakeProfits:
             value = f"₮ {DecimalToString(tp.targetPrice)} ({DecimalToString(tp.amount)})"
@@ -190,7 +190,7 @@ class Call:
                 status = "Open"
             else:
                 status = ""
-            takeProfits += f"\n| {str(status).rjust(firstColumnWidth)} | {value.ljust(secondColumnWidth)} |"
+            takeProfits += f"\n{str(status).rjust(firstColumnWidth)} {value}"
 
         status = self.__dbCall.status.name
         if self.__dbCall.status == database.CryptoCall.Status.CLOSED and self.__dbCall.stopLossTriggered is not None:
@@ -205,26 +205,29 @@ class Call:
 
         return f"""{comment}
 ```
-{divider}
-| Call ID       | {str(self.id).ljust(secondColumnWidth)} |
-| Pair          | {str(self.pair).ljust(secondColumnWidth)} |
-| Status        | {status.ljust(secondColumnWidth)} |
-| Entry Price   | ₮ {DecimalToString(self.entryPrice).ljust(secondColumnWidth - 2)} |
-| Stop Loss     | ₮ {DecimalToString(self.stopLoss).ljust(secondColumnWidth - 2)} |
-| Investment    | ₮ {DecimalToString(self.investment).ljust(secondColumnWidth - 2)} |
-| Amount Coins  | {DecimalToString(self.amount).ljust(secondColumnWidth)} |
-| Current Price | ₮ {DecimalToString(self.price).ljust(secondColumnWidth - 2)} |
-| Current Value | ₮ {DecimalToString(self.value).ljust(secondColumnWidth - 2)} |
-| Result*       | ₮ {DecimalToString(totalResult).ljust(secondColumnWidth - 2)} |
-{divider}
-| Profits       | {str("").ljust(secondColumnWidth)} |{takeProfits}
-{divider}
+Call ID       {str(self.id)}
+Pair          {str(self.pair)}
+Exchange      {str(self.exchange)}
+Status        {status}
+Entry Price   ₮ {DecimalToString(self.entryPrice)}
+Stop Loss     ₮ {DecimalToString(self.stopLoss)}
+Investment    ₮ {DecimalToString(self.investment)}
+Amount Coins  {DecimalToString(self.amount)}
+Current Price ₮ {DecimalToString(self.price)}
+Current Value ₮ {DecimalToString(self.value)}
+Result*       ₮ {DecimalToString(totalResult)} {percentage}
+
+Profits{takeProfits}
 ```
 """
 
     @property
     def pair(self) -> str:
         return self.__dbCall.pair
+
+    @property
+    def exchange(self) -> str:
+        return self.__dbCall.exchange
 
     @property
     def entryPrice(self) -> Decimal:
@@ -291,60 +294,87 @@ class Call:
     def id(self) -> int:
         return self.__dbCall.id
 
-class CryptoMonitor:
-    def __init__(self):
-        self.__client = None
-        self.__bsm = None
-        self.__running = False
-        self.__task = None
+class  CryptoExchange:
+    INTERVAL = '1m'
+
+    def __init__(self, name: str):
+        if hasattr(ccxt, name):
+            self.__exchange = getattr(ccxt, name)({
+                'enableRateLimit': True,
+                'options': {
+                    'defaultType': 'spot',
+                },
+            })
+            self.__name = name
+
+            if not hasattr(self.__exchange, 'loadMarkets'):
+                raise ValueError(
+                    f"Exchange {self.__exchange.name} does not support loadMarkets.")
+            if not hasattr(self.__exchange, 'watchOHLCV'):
+                raise ValueError(
+                    f"Exchange {self.__exchange.name} does not support watchOHLCV.")
+        else:
+            raise ValueError(f"Exchange {name} not found.")
         self.__openCalls = {}
         self.__exchangeInfo = {'last': 0, 'symbols': None}
-
-    async def Initialize(self):
-        self.__client = await AsyncClient.create()
-        self.__bsm = BinanceSocketManager(self.__client)
         self.__running = True
-        await self.__LoadOpenCalls()
 
     async def Stop(self):
+        """
+        Stop the exchange and close all open calls.
+        """
         self.__running = False
+
         for pairData in self.__openCalls.copy().values():
+            if hasattr(self.__exchange, 'unWatchOHLCV'):
+                await self.__exchange.unWatchOHLCV(pairData['pair'], self.INTERVAL)
+
             if pairData['task'] is not None:
                 pairData['task'].cancel()
 
-        if self.__bsm is not None:
-            self.__bsm = None
-        if self.__client is not None:
-            await self.__client.close_connection()
-            self.__client = None
+        self.__openCalls = []
+        print(f"Closed all calls for {self.__name}")
 
-    async def __HandleKline(self, pairData, msg) -> bool:
-        # {'t': 1745691180000,
-        #  'T': 1745691239999,
-        #  's': 'BTCUSDT',
-        #  'i': '1m',
-        #  'f': 4853411419,
-        #  'L': 4853412364,
-        #  'o': '94304.35000000',
-        #  'c': '94300.20000000',
-        #  'h': '94304.35000000',
-        #  'l': '94300.19000000',
-        #  'v': '1.27534000',
-        #  'n': 946,
-        #  'x': True,
-        #  'q': '120266.16467580',
-        #  'V': '0.18833000',
-        #  'Q': '17759.71510360',
-        #  'B': '0'}
+    @property
+    def name(self) -> str:
+        return self.__name
+    @property
+    def exchange(self) -> str:
+        return self.__exchange.name
+    @property
+    def openCalls(self) -> List[Tuple[str, str]]:
+        return self.__openCalls
+    @property
+    def size(self) -> int:
+        return len(self.__openCalls)
+
+    async def __CheckPair(self, pair: str) -> str:
+        """
+        Check if the trading pair is valid. Raises an exception if not. Returns the pair if valid.
+        """
+        if not pair.endswith("USDT"):
+            raise ValueError(f"Invalid pair: {pair}. Only USDT pairs are supported.")
+
+        if self.__exchangeInfo is None or (time.time() - self.__exchangeInfo['last']) > 3600:
+            self.__exchangeInfo['last'] = time.time()
+            exchangeInfo = await self.__exchange.loadMarkets()
+            self.__exchangeInfo['symbols'] = [symbol for symbol, market in exchangeInfo.items() if market['active'] and market['type'] == 'spot']
+        if pair in self.__exchangeInfo['symbols']:
+            return pair
+        raise ValueError(f"Invalid pair: {pair}. This pair is not trading at Binance.")
+
+    async def __HandleOhlcv(self, pairData, ohlcv) -> bool:
+        # Handle the incoming OHLCV message
+        # [time, open, high, low, close, volume]
         active = True
-        if msg and msg['e'] == 'kline' and msg['k']['x'] == True:
-            k = msg['k']
-            klineData = { "low": Decimal(k['l']),
-                          "high": Decimal(k['h']),
-                          "time": datetime.fromtimestamp((k['T'] + 1) / 1000),
-                          #"open": Decimal(k['o']),
-                          "close": Decimal(k['c']),
-                          "pair": k['s']}
+        if ohlcv and ohlcv[0] != pairData['lastOhlcv'][0]:
+            pairData['lastOhlcv'] = ohlcv
+            klineData = {"low": Decimal(str(ohlcv[3])),
+                         "high": Decimal(str(ohlcv[2])),
+                         "time": datetime.fromtimestamp(ohlcv[0] / 1000),
+                         # "open": Decimal(str(ohlcv[1])),
+                         "close": Decimal(str(ohlcv[4])),
+                         "pair": pairData['pair']}
             callsToRemove = []
             for call in pairData['calls']:
                 if not await call.Update(klineData):
@@ -356,77 +386,135 @@ class CryptoMonitor:
                     active = False
         return active
 
-    async def __ReceiveKlines(self, pair):
+    async def __WatchOhlcv(self, pair):
         pairData = self.__openCalls[pair]
         running = True
-        async with pairData['socket'] as stream:
-            while self.__running and running:
-                try:
-                    msg = await stream.recv()
-                    if not await self.__HandleKline(pairData, msg):
-                        running = False
-                except Exception:
-                    traceback.print_exc()
 
+        try:
+            pairData['lastOhlcv'] = (await self.__exchange.watchOHLCV(pair, self.INTERVAL))[0]
+        except Exception:
+            print(f"Error fetching initial OHLCV for {pair}: {e}")
+            running = False
+
+        while self.__running and running:
+            try:
+                msg = await self.__exchange.watchOHLCV(pair, self.INTERVAL)
+                for ohlcv in msg:
+                    if not await self.__HandleOhlcv(pairData, ohlcv):
+                        running = False
+            except Exception:
+                traceback.print_exc()
+
+        try:
+            if self.__running and hasattr(self.__exchange, 'unWatchOHLCV'):
+                await self.__exchange.unWatchOHLCV(pair, self.INTERVAL)
+        except Exception as e:
+            print(f"Error unwatching OHLCV for {pair}: {e}")
         del self.__openCalls[pair]
         print(f"Closed all calls for {pair}")
 
-    async def __RegisterCall(self, call: Call):
-        binancePair = await self.__CheckPair(call.pair)
-        if binancePair in self.__openCalls:
-            self.__openCalls[binancePair]['calls'].append(call)
+    async def _RegisterCall(self, call: Call):
+        pair = await self.__CheckPair(call.pair)
+        if pair in self.__openCalls:
+            self.__openCalls[pair]['calls'].append(call)
         else:
-            socket = self.__bsm.kline_socket(symbol=binancePair, interval=AsyncClient.KLINE_INTERVAL_1MINUTE)
-            await socket.connect()
-            self.__openCalls[binancePair] = {'calls': [call], 'pair': binancePair, 'socket': socket, 'task': None}
-            self.__openCalls[binancePair]['task'] = asyncio.create_task(self.__ReceiveKlines(binancePair))
-            print(f"Registered call for {binancePair}")
-
+            self.__openCalls[pair] = {'calls': [call], 'pair': pair, 'task': None, 'lastOhlcv': None}
+            self.__openCalls[pair]['task'] = asyncio.create_task(self.__WatchOhlcv(pair))
+            print(f"Created task call for {pair}")
 
     async def AddCall(self, pair: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
         await self.__CheckPair(pair)
-        call = await Call.Create(pair, entryPrice, stopLoss, takeProfits)
-        await self.__RegisterCall(call)
-
+        call = await Call.Create(pair, self.name, entryPrice, stopLoss, takeProfits)
+        await self._RegisterCall(call)
+        print(f"Added pair {pair} to watch.")
         return call
 
-    async def __CheckPair(self, pair: str) -> str:
-        """
-        Check if the trading pair is valid. Raises an exception if not. Returns the pair if valid.
-        """
-        binancePair = pair.upper().replace("/", "")
-        if not binancePair.endswith("USDT"):
-            raise ValueError(
-                f"Invalid pair: {pair}. Only USDT pairs are supported.")
-
-        if self.__exchangeInfo is None or (time.time() - self.__exchangeInfo['last']) > 3600:
-            self.__exchangeInfo['last'] = time.time()
-            exchangeInfo = await self.__client.get_exchange_info()
-            self.__exchangeInfo['symbols'] = [s['symbol']
-                                              for s in exchangeInfo['symbols'] if s['status'] == 'TRADING']
-        if binancePair in self.__exchangeInfo['symbols']:
-            return binancePair
-        raise ValueError(
-            f"Invalid pair: {pair}. This pair is not trading at Binance.")
-
-    async def Get(self, callId: int) -> Call:
+    def Get(self, callId: int) -> Call:
         """
         Get a call by its ID.
         """
-        # First try to find it in the open calls
         for pairData in self.__openCalls.values():
             for call in pairData['calls']:
                 if call.id == callId:
                     return call
-        return await Call.GetById(callId)
 
-    async def GetOpenCalls(self) -> List[Call]:
+    def GetOpenCalls(self) -> List[Call]:
         """
         Get all open calls.
         """
         calls = []
         for pairData in self.__openCalls.values():
             calls.extend(pairData['calls'])
+        return calls
+
+class CryptoMonitor:
+    def __init__(self):
+        self.__client = None
+        self.__bsm = None
+        self.__running = False
+        self.__exchanges = {}
+
+    async def Initialize(self):
+        self.__running = True
+        await self.__LoadOpenCalls()
+
+    async def Stop(self):
+        self.__running = False
+
+        for exchange in self.__exchanges.copy().values():
+            await exchange.Stop()
+
+    async def __RegisterExchange(self, exchangeName: str):
+        """
+        Register an exchange with the monitor.
+        """
+        if exchangeName in self.__exchanges:
+            return self.__exchanges[exchangeName]
+
+        exchange = CryptoExchange(exchangeName)
+        self.__exchanges[exchangeName] = exchange
+        return exchange
+
+
+    async def AddCall(self, exchangeName: str, pair: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
+        exchange = await self.__RegisterExchange(exchangeName)
+
+        try:
+            call = await exchange.AddCall(pair, entryPrice, stopLoss, takeProfits)
+        except ValueError:
+            if exchange.size == 0:
+                await exchange.Stop()
+                del self.__exchanges[exchangeName]
+            raise
+
+        return call
+
+    async def __RegisterCall(self, call: Call):
+        """
+        Register a call with the appropriate exchange.
+        """
+        exchange = await self.__RegisterExchange(call.exchange)
+
+        await exchange._RegisterCall(call)
+
+    async def Get(self, callId: int) -> Call:
+        """
+        Get a call by its ID.
+        """
+        # First try to find it in the open calls
+        for exchange in self.__exchanges.values():
+            call = exchange.Get(callId)
+            if call is not None:
+                return call
+        return await Call.GetById(callId)
+
+    def GetOpenCalls(self) -> List[Call]:
+        """
+        Get all open calls.
+        """
+        calls = []
+        for exchange in self.__exchanges.values():
+            calls.extend(exchange.GetOpenCalls())
         return calls
 
     async def __LoadOpenCalls(self):

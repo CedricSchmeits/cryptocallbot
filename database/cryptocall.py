@@ -15,6 +15,7 @@ class CryptoCall(BaseModel):
     _fieldDefinitions = {
         "id": "BIGINT AUTO_INCREMENT PRIMARY KEY",
         "pair": "VARCHAR(30) NOT NULL",
+        "exchange": "VARCHAR(30) NOT NULL",
         "entryPrice": "DECIMAL(20, 10) NOT NULL",
         "stopLoss": "DECIMAL(20, 10) NOT NULL",
         "investment": "DECIMAL(20, 10) DEFAULT '100.0'",
