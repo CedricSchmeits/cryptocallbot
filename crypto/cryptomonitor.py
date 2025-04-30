@@ -177,11 +177,12 @@ class Call:
     def GetOverview(self, message="") -> str:
         """Get a string overview of the call."""
 
-        firstColumnWidth = 13
+        firstColumnWidth = 11
 
         takeProfits = ""
         for tp in self.__dbTakeProfits:
-            value = f"₮ {DecimalToString(tp.targetPrice)} ({DecimalToString(tp.amount)})"
+            targetPercentage = ((tp.targetPrice / self.entryPrice) - 1) * 100
+            value = f"₮ {DecimalToString(tp.targetPrice)} ({DecimalToString(tp.amount)}) {targetPercentage:.2f}%"
             if tp.triggeredAt is not None:
                 status = "Closed"
             elif self.__dbCall.status == database.CryptoCall.Status.CLOSED:
@@ -203,13 +204,15 @@ class Call:
         if message:
             comment += f"\n{message}"
 
+        stopLossPercentage = (1 - self.stopLoss / self.entryPrice) * 100
+
         return f"""{comment}
 ```
 Call ID       {str(self.id)}
 Pair          {str(self.pair)}
 Exchange      {str(self.exchange)}
 Status        {status}
-Entry Price   ₮ {DecimalToString(self.entryPrice)}
+Entry Price   ₮ {DecimalToString(self.entryPrice)} {stopLossPercentage:.2f}%
 Stop Loss     ₮ {DecimalToString(self.stopLoss)}
 Investment    ₮ {DecimalToString(self.investment)}
 Amount Coins  {DecimalToString(self.amount)}
