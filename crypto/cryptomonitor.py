@@ -325,15 +325,18 @@ class  CryptoExchange:
         """
         self.__running = False
 
-        for pairData in self.__openCalls.copy().values():
+        openCalls = self.__openCalls.copy()
+        for pairData in openCalls.values():
             if hasattr(self.__exchange, 'unWatchOHLCV'):
                 await self.__exchange.unWatchOHLCV(pairData['pair'], self.INTERVAL)
 
-            if pairData['task'] is not None:
-                pairData['task'].cancel()
-
+        openTasks = [pairData['task'] for pairData in openCalls.values() if pairData['task'] is not None]
+        await asyncio.gather(*openTasks)
         self.__openCalls = []
         print(f"Closed all calls for {self.__name}")
+        if hasattr(self.__exchange, 'close'):
+            await self.__exchange.close()
+        print(f"Closed exchange {self.__name}")
 
     @property
     def name(self) -> str:
@@ -390,12 +393,6 @@ class  CryptoExchange:
         pairData = self.__openCalls[pair]
         running = True
 
-        try:
-            pairData['lastOhlcv'] = (await self.__exchange.watchOHLCV(pair, self.INTERVAL))[0]
-        except Exception:
-            print(f"Error fetching initial OHLCV for {pair}: {e}")
-            running = False
-
         while self.__running and running:
             try:
                 msg = await self.__exchange.watchOHLCV(pair, self.INTERVAL)
@@ -418,7 +415,15 @@ class  CryptoExchange:
         if pair in self.__openCalls:
             self.__openCalls[pair]['calls'].append(call)
         else:
-            self.__openCalls[pair] = {'calls': [call], 'pair': pair, 'task': None, 'lastOhlcv': None}
+            # load the first OHLCV to get the last price
+            ohlcv = (await self.__exchange.watchOHLCV(pair, self.INTERVAL))[0]
+            # only keep the close price
+            lastOhlcv = [int(datetime.now().timestamp() * 1000) - 1, ohlcv[4], ohlcv[4], ohlcv[4], ohlcv[4], 0]
+            self.__openCalls[pair] = {'calls': [call], 'pair': pair, 'task': None, 'lastOhlcv': lastOhlcv}
+            lastOhlcv = lastOhlcv.copy()
+            lastOhlcv[0] += 1
+            await self.__HandleOhlcv(self.__openCalls[pair], lastOhlcv)
+
             self.__openCalls[pair]['task'] = asyncio.create_task(self.__WatchOhlcv(pair))
             print(f"Created task call for {pair}")
 
