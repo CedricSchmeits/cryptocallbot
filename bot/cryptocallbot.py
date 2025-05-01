@@ -49,18 +49,14 @@ class CryptoCallBot:
     def GetApplication(self) -> Application:
         return self.__application
 
-    async def CheckCaller(self, update: Update, context: CallbackContext) -> bool:
-        if update.effective_chat.type == 'private':
-            if not BotSettings.IsFromMember(update, context):
-                await update.message.reply_text("You are not allowed to use this bot!")
-                return False
-        elif not BotSettings.IsFromGroup(update):
-            await update.message.reply_text("This bot is designed to be used in a group chat.")
+    async def CheckCaller(self, update: Update, context: CallbackContext, isCommand: bool = True) -> bool:
+        if not BotSettings.IsFromMember(update, context):
+            await update.message.reply_text("You don't have enough rights to use this command!")
             return False
         return True
 
     async def Start(self, update: Update, context: CallbackContext) -> None:
-        if not await self.CheckCaller(update, context):
+        if not await self.CheckCaller(update, context, False):
             return
 
         try:
@@ -82,7 +78,7 @@ class CryptoCallBot:
             print(f"Error sending message: {e}")
 
     async def OnAddCall(self, update: Update, context: CallbackContext) -> None:
-        if not await self.CheckCaller(update, context):
+        if not await self.CheckCaller(update, context, True):
             return
 
         if len(context.args) < 4:
@@ -128,7 +124,7 @@ class CryptoCallBot:
             await update.message.reply_text("An error occurred while creating the call.")
 
     async def OnCallStatus(self, update: Update, context: CallbackContext) -> None:
-        if not await self.CheckCaller(update, context):
+        if not await self.CheckCaller(update, context, False):
             return
 
         try:
@@ -158,7 +154,7 @@ class CryptoCallBot:
             await update.message.reply_text(f"An error occurred while fetching the status: {e}")
 
     async def OnCloseCall(self, update: Update, context: CallbackContext) -> None:
-        if not await self.CheckCaller(update, context):
+        if not await self.CheckCaller(update, context, True):
             return
 
         if len(context.args) != 1:

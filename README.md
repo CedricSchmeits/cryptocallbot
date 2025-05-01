@@ -50,6 +50,8 @@ CryptoCallBot is a Telegram bot designed to manage cryptocurrency trading calls.
    TELEGRAM_BOT_TOKEN=<your-bot-token>
    TELEGRAM_GROUP_CHAT_ID=<your-group-chat-id>
    TELEGRAM_BOT_NAME=CryptoCallBot
+   TELEGRAM_BOT_MIN_STATUS_LEVEL=RESTRICTED
+   TELEGRAM_BOT_MIN_COMMAND_LEVEL=MEMBER
 
    MYSQL_HOST=localhost
    MYSQL_PORT=3306

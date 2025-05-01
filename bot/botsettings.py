@@ -2,25 +2,62 @@ from dotenv import load_dotenv
 import os
 from telegram import Update
 from telegram.ext import ContextTypes
+from enum import Enum, auto
 
 load_dotenv()
 
 print(f"BotSettings: {os.getenv('TELEGRAM_BOT_NAME')}, {os.getenv('TELEGRAM_GROUP_CHAT_ID')}, {os.getenv('TELEGRAM_BOT_TOKEN')}")
 
+
+class MemberStatus(Enum):
+    RESTRICTED = auto()
+    MEMBER = auto()
+    ADMINISTRATOR = auto()
+    CREATOR = auto()
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            value = value.upper()
+            for member in cls:
+                if member.name == value:
+                    return member
+        return None
+
+    def __le__(self, other):
+        if not isinstance(other, MemberStatus):
+            other = MemberStatus(other)
+        return self.value <= other.value
+
+    def __lt__(self, other):
+        if not isinstance(other, MemberStatus):
+            other = MemberStatus(other)
+        return self.value < other.value
+
+    def __ge__(self, other):
+        if not isinstance(other, MemberStatus):
+            other = MemberStatus(other)
+        return self.value >= other.value
+
+    def __gt__(self, other):
+        if not isinstance(other, MemberStatus):
+            other = MemberStatus(other)
+        return self.value > other.value
+
+
 class BotSettings:
     __groupChatId = int(os.getenv('TELEGRAM_GROUP_CHAT_ID'))
     __token = os.getenv('TELEGRAM_BOT_TOKEN')
     __name = os.getenv('TELEGRAM_BOT_NAME')
+    __minStatusLevel = MemberStatus(os.getenv('TELEGRAM_BOT_MIN_STATUS_LEVEL', 'RESTRICTED'))
+    __minCommandLevel = MemberStatus(os.getenv('TELEGRAM_BOT_MIN_COMMAND_LEVEL', 'MEMBER'))
 
     @classmethod
-    def IsFromGroup(cls, update: Update) -> bool:
-        return update.effective_chat.id == cls.__groupChatId
-
-    @classmethod
-    async def IsFromMember(cls, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    async def IsFromMember(cls, update: Update, context: ContextTypes.DEFAULT_TYPE, isCommand: bool = True) -> bool:
         try:
             member = await context.bot.get_chat_member(chat_id=cls.__groupChatId, user_id=update.effective_user.id)
-            return member.status in ["creator", "administrator", "member", "restricted"]
+            minStatusLevel = cls.__minCommandLevel if isCommand else cls.__minStatusLevel
+            return MemberStatus(member.status) >= minStatusLevel
         except Exception as e:
             print(f"Error checking member status: {e}")
             return False
