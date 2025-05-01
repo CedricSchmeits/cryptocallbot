@@ -212,8 +212,8 @@ Call ID       {str(self.id)}
 Pair          {str(self.pair)}
 Exchange      {str(self.exchange)}
 Status        {status}
-Entry Price   ₮ {DecimalToString(self.entryPrice)} {stopLossPercentage:.2f}%
-Stop Loss     ₮ {DecimalToString(self.stopLoss)}
+Entry Price   ₮ {DecimalToString(self.entryPrice)}
+Stop Loss     ₮ {DecimalToString(self.stopLoss)} {stopLossPercentage:.2f}%
 Investment    ₮ {DecimalToString(self.investment)}
 Amount Coins  {DecimalToString(self.amount)}
 Current Price ₮ {DecimalToString(self.price)}
