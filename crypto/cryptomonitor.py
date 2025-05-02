@@ -13,8 +13,11 @@ def DecimalToString(value: Decimal) -> str:
     return f"{value:.10f}".rstrip('0').rstrip('.')
 
 class Call:
+    SIGNS = {"USDT": '₮', "BTC": "₿", "ETH": "Ξ", "EUR": "€", "USD": "$", "USDC": "$", "BUSD": "$"}
     def __init__(self, dbCall: database.CryptoCall, dbTakeProfits: List):
         self.__dbCall = dbCall
+        self.__baseCoin, self.__quoteCoin = dbCall.pair.split("/", 1)
+        self.__quoteSign = Call.SIGNS.get(self.__quoteCoin, self.__quoteCoin)
         self.__dbTakeProfits = dbTakeProfits
         self.__price = Decimal("0.0")
 
@@ -87,7 +90,7 @@ class Call:
         self.__dbCall.status = database.CryptoCall.Status.CLOSED
         self.__dbCall.closedAt = datetime.now()
         await self.Save()
-        await self.__SendMessage(f"Call {self.__dbCall.id} closed at ₮ {DecimalToString(self.price)}.")
+        await self.__SendMessage(f"Call {self.__dbCall.id} closed at {self.sign} {DecimalToString(self.price)}.")
 
     async def __SendMessage(self, comment: str):
         """
@@ -112,7 +115,7 @@ class Call:
         self.__dbCall.status = database.CryptoCall.Status.ACTIVE
         await self.Save()
 
-        return True, f"Buy in at ₮ {DecimalToString(self.entryPrice)}."
+        return True, f"Buy in at {self.sign} {DecimalToString(self.entryPrice)}."
 
     async def __StopLossTriggered(self, klineData) -> Tuple[bool, str]:
         self.__dbCall.status = database.CryptoCall.Status.CLOSED
@@ -130,7 +133,7 @@ class Call:
             (dbTakeProfit.targetPrice - self.__dbCall.entryPrice)
         self.__dbCall.result += dbTakeProfit.amount * dbTakeProfit.targetPrice
         await self.Save()
-        return True, f"Take profit ₮ {DecimalToString(dbTakeProfit.targetPrice)} triggered."
+        return True, f"Take profit {self.sign} {DecimalToString(dbTakeProfit.targetPrice)} triggered."
 
     async def Update(self, klineData) -> bool:
         """
@@ -182,7 +185,7 @@ class Call:
         takeProfits = ""
         for tp in self.__dbTakeProfits:
             targetPercentage = ((tp.targetPrice / self.entryPrice) - 1) * 100
-            value = f"₮ {DecimalToString(tp.targetPrice)} ({DecimalToString(tp.amount)}) {targetPercentage:.2f}%"
+            value = f"{self.sign} {DecimalToString(tp.targetPrice)} ({DecimalToString(tp.amount)}) {targetPercentage:.2f}%"
             if tp.triggeredAt is not None:
                 status = "Closed"
             elif self.__dbCall.status == database.CryptoCall.Status.CLOSED:
@@ -200,7 +203,7 @@ class Call:
         totalResult = self.result + self.value
         percentage = (totalResult / self.investment) * 100
         percentage = f"{percentage:.2f}%"
-        comment = f"Call {self.__dbCall.id}: {'🟩' if totalResult >= 0 else '🟥'} ₮ {DecimalToString(totalResult)} {percentage}"
+        comment = f"Call {self.__dbCall.id}: {'🟩' if totalResult >= 0 else '🟥'} {self.sign} {DecimalToString(totalResult)} {percentage}"
         if message:
             comment += f"\n{message}"
 
@@ -212,13 +215,13 @@ Call ID       {str(self.id)}
 Pair          {str(self.pair)}
 Exchange      {str(self.exchange)}
 Status        {status}
-Entry Price   ₮ {DecimalToString(self.entryPrice)}
-Stop Loss     ₮ {DecimalToString(self.stopLoss)} {stopLossPercentage:.2f}%
-Investment    ₮ {DecimalToString(self.investment)}
+Entry Price   {self.sign} {DecimalToString(self.entryPrice)}
+Stop Loss     {self.sign} {DecimalToString(self.stopLoss)} {stopLossPercentage:.2f}%
+Investment    {self.sign} {DecimalToString(self.investment)}
 Amount Coins  {DecimalToString(self.amount)}
-Current Price ₮ {DecimalToString(self.price)}
-Current Value ₮ {DecimalToString(self.value)}
-Result*       ₮ {DecimalToString(totalResult)} {percentage}
+Current Price {self.sign} {DecimalToString(self.price)}
+Current Value {self.sign} {DecimalToString(self.value)}
+Result*       {self.sign} {DecimalToString(totalResult)} {percentage}
 
 Profits{takeProfits}
 ```
@@ -227,6 +230,18 @@ Profits{takeProfits}
     @property
     def pair(self) -> str:
         return self.__dbCall.pair
+
+    @property
+    def quoteCoin(self) -> str:
+        return self.__quoteCoin
+
+    @property
+    def quoteSign(self) -> str:
+        return self.__quoteSign
+
+    @property
+    def baseCoin(self) -> str:
+        return self.__baseCoin
 
     @property
     def exchange(self) -> str:
@@ -358,9 +373,6 @@ class  CryptoExchange:
         """
         Check if the trading pair is valid. Raises an exception if not. Returns the pair if valid.
         """
-        if not pair.endswith("USDT"):
-            raise ValueError(f"Invalid pair: {pair}. Only USDT pairs are supported.")
-
         if self.__exchangeInfo is None or (time.time() - self.__exchangeInfo['last']) > 3600:
             self.__exchangeInfo['last'] = time.time()
             exchangeInfo = await self.__exchange.loadMarkets()
