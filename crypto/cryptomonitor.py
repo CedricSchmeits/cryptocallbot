@@ -236,7 +236,7 @@ Profits{takeProfits}
         return self.__quoteCoin
 
     @property
-    def quoteSign(self) -> str:
+    def sign(self) -> str:
         return self.__quoteSign
 
     @property
