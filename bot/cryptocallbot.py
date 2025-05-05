@@ -16,7 +16,7 @@ load_dotenv()
 class CryptoCallBot:
     __singelton = None
     __methodDocumentation = {
-        "call": """/addcall <pair> <entry> <stoploss> <take_profit> [<take_profit2> ...]
+        "call": """/addcall <contract_address> <exchange> <pair> <entry> <stoploss> <take_profit> [<take_profit2> ...]
   Create a new crypto call. The bot will send a message to the group with the call details. As buy in amount ₮ 100 is used.
    • <contractAddress> - The contract address of the token (e.g., 0x1234567890abcdef1234567890abcdef12345678 or "" when base token doesn't have a contract address)
    • <exchange> - The exchange to use (e.g., binance)
@@ -27,12 +27,12 @@ class CryptoCallBot:
         "status": """/callstatus [<call_id>]
   Show the status of a specific call or all calls that are in progress.
    • <call_id> - The ID of the call to check. If not provided, show all calls.""",
-        "close": """/closecall <call_id>
-  Close a specific call.""",
         "stoploss": """/callstoploss <call_id> <stoploss>
   Set the stop loss for a specific call.
    • <call_id> - The ID of the call to set the stop loss for.
-   • <stoploss> - The new stop loss price for the call can be a percentage of the current price or a fixed price""",}
+   • <stoploss> - The new stop loss price for the call can be a percentage of the current price or a fixed price""",
+   "close": """/closecall <call_id>
+  Close a specific call."""}
 
     def __init__(self):
         self.__application = Application.builder()\
