@@ -164,7 +164,6 @@ class CryptoCallBot:
         except Exception as e:
             traceback.print_exc()
             await update.message.reply_text(f"An error occurred while setting the stop loss: {e}")
-        except ValueError:
 
     async def OnCallStatus(self, update: Update, context: CallbackContext) -> None:
         if not await self.CheckCaller(update, context, False):
