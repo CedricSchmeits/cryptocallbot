@@ -63,7 +63,7 @@ class CryptoCallBot:
         if not await self.CheckCaller(update, context, False):
             return
 
-        docText = '\n'.join(self.__methodDocumentation.values())
+        docText = '\n\n'.join(self.__methodDocumentation.values())
         await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Welcome to the Crypto Call Bot!\n{docText}"),
                                         parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -81,7 +81,7 @@ class CryptoCallBot:
             return
 
         if len(context.args) < 6:
-            await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Usage: {self.__methodDocumentation['call']}"), parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Usage:\n{self.__methodDocumentation['call']}"), parse_mode=ParseMode.MARKDOWN_V2)
             return
 
         try:
@@ -133,7 +133,7 @@ class CryptoCallBot:
             return
 
         if len(context.args) != 2:
-            await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Usage: {self.__methodDocumentation['stoploss']}"), parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Usage:\n{self.__methodDocumentation['stoploss']}"), parse_mode=ParseMode.MARKDOWN_V2)
             return
         try:
             callId = int(context.args[0])
@@ -200,7 +200,7 @@ class CryptoCallBot:
             return
 
         if len(context.args) != 1:
-            await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Usage: {self.__methodDocumentation['close']}"), parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Usage:\n{self.__methodDocumentation['close']}"), parse_mode=ParseMode.MARKDOWN_V2)
             return
         try:
             callId = int(context.args[0])
