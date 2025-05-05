@@ -18,7 +18,7 @@ CryptoCallBot is a Telegram bot designed to manage cryptocurrency trading calls.
 
 - Python 3.10+
 - MySQL database
-- Binance API access
+- CCXT Pro
 - Telegram bot token
 
 ---
@@ -157,6 +157,6 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## Acknowledgments
 
-- [Binance API](https://github.com/sammchardy/python-binance) for real-time cryptocurrency data.
+- [ccxt.pro](https://github.com/ccxt/ccxt) for real-time cryptocurrency data.
 - [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) for Telegram bot integration.
 - [aiomysql](https://github.com/aio-libs/aiomysql) for asynchronous MySQL interactions.
