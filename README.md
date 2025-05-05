@@ -128,6 +128,21 @@ Contributions are welcome! Please follow these steps:
 
 ---
 
+## Keeping Batteries Charged
+
+Developing bots takes energy (and snacks). If you enjoyed using CryptoCallBot, send a little juice in the form of a few satoshis or some gwei.
+
+**Bitcoin**:
+`bc1qecwm6f9qnmchua267eajup2g5nmegpulxwejd7`
+
+**Litecoin**:
+`ltc1qq007rrklwgxsjzwnxdve6ff0s5lq72z5jcdgf5`
+
+**Ethereum**:
+`0xa28f1222FAA5037eb2BB8097c45b72258866D153`
+
+---
+
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
