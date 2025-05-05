@@ -14,6 +14,7 @@ class CryptoCall(BaseModel):
     _tableName = "crypto_call"
     _fieldDefinitions = {
         "id": "BIGINT AUTO_INCREMENT PRIMARY KEY",
+        "contractAddress": "VARCHAR(128) NOT NULL",
         "pair": "VARCHAR(30) NOT NULL",
         "exchange": "VARCHAR(30) NOT NULL",
         "entryPrice": "DECIMAL(20, 10) NOT NULL",

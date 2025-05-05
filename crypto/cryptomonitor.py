@@ -22,8 +22,9 @@ class Call:
         self.__price = Decimal("0.0")
 
     @classmethod
-    async def Create(cls, pair: str, exchange: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
-        dbCall = await database.CryptoCall.Insert(pair=pair,
+    async def Create(cls, contractAddress: str, pair: str, exchange: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
+        dbCall = await database.CryptoCall.Insert(contractAddress=contractAddress,
+                                                  pair=pair,
                                                   exchange=exchange,
                                                   entryPrice=entryPrice,
                                                   stopLoss=stopLoss)
@@ -90,9 +91,9 @@ class Call:
         self.__dbCall.status = database.CryptoCall.Status.CLOSED
         self.__dbCall.closedAt = datetime.now()
         await self.Save()
-        await self.__SendMessage(f"Call {self.__dbCall.id} closed at {self.sign} {DecimalToString(self.price)}.")
+        await self.SendMessage(f"Call {self.__dbCall.id} closed at {self.sign} {DecimalToString(self.price)}.")
 
-    async def __SendMessage(self, comment: str):
+    async def SendMessage(self, comment: str):
         """
         Post a message to the bot's channel.
         """
@@ -174,7 +175,7 @@ class Call:
                     messages.append("Closed as all target prices have been reached.")
 
         if messages:
-            await self.__SendMessage("\n".join(messages))
+            await self.SendMessage("\n".join(messages))
         return retVal
 
     def GetOverview(self, message="") -> str:
@@ -212,6 +213,7 @@ class Call:
         return f"""{comment}
 ```
 Call ID       {str(self.id)}
+Contract      {str(self.contractAddress)}
 Pair          {str(self.pair)}
 Exchange      {str(self.exchange)}
 Status        {status}
@@ -226,6 +228,10 @@ Result*       {self.sign} {DecimalToString(totalResult)} {percentage}
 Profits{takeProfits}
 ```
 """
+
+    @property
+    def contractAddress(self) -> str:
+        return self.__dbCall.contractAddress
 
     @property
     def pair(self) -> str:
@@ -254,6 +260,13 @@ Profits{takeProfits}
     @property
     def stopLoss(self) -> Decimal:
         return self.__dbCall.stopLoss
+    @stopLoss.setter
+    def stopLoss(self, value: Decimal):
+        if isinstance(value, str):
+            value = Decimal(value)
+        elif isinstance(value, float):
+            value = Decimal.from_float(value)
+        self.__dbCall.stopLoss = value
 
     @property
     def investment(self) -> Decimal:
@@ -443,9 +456,9 @@ class  CryptoExchange:
             self.__openCalls[pair]['task'] = asyncio.create_task(self.__WatchOhlcv(pair))
             print(f"Created task call for {pair}")
 
-    async def AddCall(self, pair: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
+    async def AddCall(self, contractAddress: str, pair: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
         await self.__CheckPair(pair)
-        call = await Call.Create(pair, self.name, entryPrice, stopLoss, takeProfits)
+        call = await Call.Create(contractAddress, pair, self.name, entryPrice, stopLoss, takeProfits)
         await self._RegisterCall(call)
         print(f"Added pair {pair} to watch.")
         return call
@@ -497,11 +510,12 @@ class CryptoMonitor:
         return exchange
 
 
-    async def AddCall(self, exchangeName: str, pair: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
+    async def AddCall(self, contractAddress: str, exchangeName: str,
+                      pair: str, entryPrice: Decimal, stopLoss: Decimal, takeProfits: List):
         exchange = await self.__RegisterExchange(exchangeName)
 
         try:
-            call = await exchange.AddCall(pair, entryPrice, stopLoss, takeProfits)
+            call = await exchange.AddCall(contractAddress, pair, entryPrice, stopLoss, takeProfits)
         except ValueError:
             if exchange.size == 0:
                 await exchange.Stop()

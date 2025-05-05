@@ -18,6 +18,7 @@ class CryptoCallBot:
     __methodDocumentation = {
         "call": """/addcall <pair> <entry> <stoploss> <take_profit> [<take_profit2> ...]
   Create a new crypto call. The bot will send a message to the group with the call details. As buy in amount ₮ 100 is used.
+   • <contractAddress> - The contract address of the token (e.g., 0x1234567890abcdef1234567890abcdef12345678 or "" when base token doesn't have a contract address)
    • <exchange> - The exchange to use (e.g., binance)
    • <pair> - The crypto pair to trade (e.g., BTC/USDT)
    • <entry> - The entry price for the trade
@@ -27,7 +28,11 @@ class CryptoCallBot:
   Show the status of a specific call or all calls that are in progress.
    • <call_id> - The ID of the call to check. If not provided, show all calls.""",
         "close": """/closecall <call_id>
-  Close a specific call."""}
+  Close a specific call.""",
+        "stoploss": """/callstoploss <call_id> <stoploss>
+  Set the stop loss for a specific call.
+   • <call_id> - The ID of the call to set the stop loss for.
+   • <stoploss> - The new stop loss price for the call can be a percentage of the current price or a fixed price""",}
 
     def __init__(self):
         self.__application = Application.builder()\
@@ -39,12 +44,10 @@ class CryptoCallBot:
         self.__monitor = CryptoMonitor()
 
         self.__application.add_handler(CommandHandler("start", self.Start))
-        self.__application.add_handler(
-            CommandHandler("addcall", self.OnAddCall))
-        self.__application.add_handler(
-            CommandHandler("callstatus", self.OnCallStatus))
-        self.__application.add_handler(
-            CommandHandler("closecall", self.OnCloseCall))
+        self.__application.add_handler(CommandHandler("addcall", self.OnAddCall))
+        self.__application.add_handler(CommandHandler("callstatus", self.OnCallStatus))
+        self.__application.add_handler(CommandHandler("closecall", self.OnCloseCall))
+        self.__application.add_handler(CommandHandler("callstoploss", self.OnCallStopLoss))
 
     def GetApplication(self) -> Application:
         return self.__application
@@ -86,19 +89,20 @@ class CryptoCallBot:
             return
 
         try:
-            exchange = context.args[0]
-            pair = context.args[1]
-            entryPrice = Decimal(context.args[2])
-            stopLoss = context.args[3]
+            contractAddress = context.args[0]
+            exchange = context.args[1]
+            pair = context.args[2]
+            entryPrice = Decimal(context.args[3])
+            stopLoss = context.args[4]
             if stopLoss.endswith('%'):
                 stopLoss = entryPrice * (1 - Decimal(stopLoss[:-1]) / 100)
             else:
                 stopLoss = Decimal(stopLoss)
 
-            nrOfTakeProfits = len(context.args) - 4
+            nrOfTakeProfits = len(context.args) - 5
             takeProfits = []
             for i in range(nrOfTakeProfits):
-                targetPrice = context.args[i + 4]
+                targetPrice = context.args[i + 5]
                 if "@" in targetPrice:
                     batchSize, targetPrice = targetPrice.split("@")
                     batchSize = Decimal(batchSize) / 100
@@ -114,7 +118,7 @@ class CryptoCallBot:
                 takeProfits.append(
                     {"targetPrice": targetPrice, "size": batchSize})
 
-            call = await self.__monitor.AddCall(exchange, pair, entryPrice, stopLoss, takeProfits)
+            call = await self.__monitor.AddCall(contractAddress, exchange, pair, entryPrice, stopLoss, takeProfits)
             await update.message.reply_text(BotSettings.EscapeMarkdownV2(call.GetOverview()),
                                             parse_mode=ParseMode.MARKDOWN_V2)
         except ValueError as e:
@@ -122,6 +126,45 @@ class CryptoCallBot:
         except Exception:
             traceback.print_exc()
             await update.message.reply_text("An error occurred while creating the call.")
+
+
+    async def OnCallStopLoss(self, update: Update, context: CallbackContext) -> None:
+        if not await self.CheckCaller(update, context, True):
+            return
+
+        if len(context.args) != 2:
+            await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Usage: {self.__methodDocumentation['stoploss']}"), parse_mode=ParseMode.MARKDOWN_V2)
+            return
+        try:
+            callId = int(context.args[0])
+            call = await self.__monitor.Get(callId)
+            if not call:
+                await update.message.reply_text(f"Call ID {callId} not found.")
+                return
+            if call.status not in (Call.Status.ACTIVE, Call.Status.ACQUIRING):
+                await update.message.reply_text(f"Call ID {callId} is not active.")
+                return
+
+            stopLoss = context.args[1]
+            if stopLoss.endswith('%'):
+                if call.price <= Decimal("0.0"):
+                    await update.message.reply_text(f"Call ID {callId} has no price, try again later when the price is received from the exchange.")
+                    return
+                stopLoss = call.entryPrice * (1 - Decimal(stopLoss[:-1]) / 100)
+            else:
+                stopLoss = Decimal(stopLoss)
+
+            if stopLoss <= Decimal("0.0"):
+                await update.message.reply_text(f"Stop loss must be greater than 0.")
+                return
+
+            call.stopLoss = stopLoss
+            await call.Save()
+            await call.SendMessage(f"Update stop loss to: {stopLoss}")
+        except Exception as e:
+            traceback.print_exc()
+            await update.message.reply_text(f"An error occurred while setting the stop loss: {e}")
+        except ValueError:
 
     async def OnCallStatus(self, update: Update, context: CallbackContext) -> None:
         if not await self.CheckCaller(update, context, False):

@@ -74,11 +74,17 @@ CryptoCallBot is a Telegram bot designed to manage cryptocurrency trading calls.
    ```
 
 2. **Telegram Commands**:
-   - `/addcall <pair> <entry> <stoploss> <take_profit> [<take_profit2> ...]`
+   - `/addcall <contract_address> <exchange> <pair> <entry> <stoploss> <take_profit> [<take_profit2> ...]`
      Create a new trading call. Example:
      ```
-     /addcall BTC/USDT 50000 48000 52000 54000
-     /addcall BTC/USDT 50000 10% 50@20% 50@40%
+     /addcall "" binance BTC/USDT 50000 48000 52000 54000
+     /addcall 0x2170ed0880ac9a755fd29b2688956bd959f933f8 binance ETH/USDT 2000 10% 50@20% 50@40%
+     ```
+   - `/callstoploss <call_id> <stoploss>`
+     Change a stoploss of an active call, ether by price or precentage of the current price
+     ```
+     /callstoploss 3 45000
+     /callstoploss 3 10%
      ```
    - `/callstatus [<call_id>]`
      Check the status of a specific call or all active calls.
