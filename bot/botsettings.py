@@ -10,12 +10,12 @@ print(f"BotSettings: {os.getenv('TELEGRAM_BOT_NAME')}, {os.getenv('TELEGRAM_GROU
 
 
 class MemberStatus(Enum):
-    BANNED = auto()
+    KICKED = auto()
     LEFT = auto()
     RESTRICTED = auto()
     MEMBER = auto()
     ADMINISTRATOR = auto()
-    OWNER = auto()
+    CREATOR = auto()
 
     @classmethod
     def _missing_(cls, value):
