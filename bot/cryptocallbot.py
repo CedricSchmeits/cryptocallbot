@@ -2,6 +2,7 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 from telegram.constants import ParseMode
+from telegram.error import RetryAfter
 from dotenv import load_dotenv
 from decimal import Decimal
 import traceback
@@ -118,6 +119,10 @@ class CryptoCallBot:
                                             parse_mode=ParseMode.MARKDOWN_V2)
         except ValueError as e:
             await update.message.reply_text(f"Invalid arguments. error: {e}")
+        except RetryAfter as e:
+            # Most likely the bot has alread sent a message to the group chat and is rate limited
+            # by Telegram. In this case we can ditch the message.
+            print(f"Rate limit exceeded. Retry after {e.retry_after} seconds.")
         except Exception:
             traceback.print_exc()
             await update.message.reply_text("An error occurred while creating the call.")
