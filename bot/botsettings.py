@@ -6,9 +6,6 @@ from enum import Enum, auto
 
 load_dotenv()
 
-print(f"BotSettings: {os.getenv('TELEGRAM_BOT_NAME')}, {os.getenv('TELEGRAM_GROUP_CHAT_ID')}, {os.getenv('TELEGRAM_BOT_TOKEN')}")
-
-
 class MemberStatus(Enum):
     KICKED = auto()
     LEFT = auto()

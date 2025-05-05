@@ -6,6 +6,7 @@ from telegram.error import RetryAfter
 from dotenv import load_dotenv
 from decimal import Decimal
 import traceback
+from version import __version__
 
 from .botsettings import BotSettings
 import database
@@ -64,7 +65,7 @@ class CryptoCallBot:
             return
 
         docText = '\n\n'.join(self.__methodDocumentation.values())
-        await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Welcome to the Crypto Call Bot!\n{docText}"),
+        await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Welcome to the **{BotSettings.GetBotName()}**!\n{docText}"),
                                         parse_mode=ParseMode.MARKDOWN_V2)
 
     async def UpdateCall(self, call: Call, reason: str) -> None:
@@ -216,7 +217,7 @@ class CryptoCallBot:
         await self.__monitor.Initialize()
 
     def Run(self) -> None:
-        print(f"Starting {BotSettings.GetBotName()}, only listening to group chat: {BotSettings.GetGroupChatId()}")
+        print(f"Starting {BotSettings.GetBotName()} version {__version__}, only listening to group chat: {BotSettings.GetGroupChatId()}")
         self.__application.run_polling()
 
     async def __PostShutdown(self, application: Application) -> None:
