@@ -62,11 +62,6 @@ class CryptoCallBot:
         if not await self.CheckCaller(update, context, False):
             return
 
-        try:
-            await update.message.delete()
-        except Exception as e:
-            print(f"Error deleting message: {e}")
-
         docText = '\n'.join(self.__methodDocumentation.values())
         await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Welcome to the Crypto Call Bot!\n{docText}"),
                                         parse_mode=ParseMode.MARKDOWN_V2)
