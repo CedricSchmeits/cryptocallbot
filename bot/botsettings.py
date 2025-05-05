@@ -55,8 +55,11 @@ class BotSettings:
     @classmethod
     async def IsFromMember(cls, update: Update, context: ContextTypes.DEFAULT_TYPE, isCommand: bool = True) -> bool:
         try:
+            print(f"Checking member status for user: {update.effective_user.id}")
             member = await context.bot.get_chat_member(chat_id=cls.__groupChatId, user_id=update.effective_user.id)
+            print(f"Member status: {member.status}")
             minStatusLevel = cls.__minCommandLevel if isCommand else cls.__minStatusLevel
+            print(f"Minimum status level: {minStatusLevel}")
             return MemberStatus(member.status) >= minStatusLevel
         except Exception as e:
             print(f"Error checking member status: {e}")
