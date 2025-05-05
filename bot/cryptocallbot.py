@@ -50,7 +50,7 @@ class CryptoCallBot:
         return self.__application
 
     async def CheckCaller(self, update: Update, context: CallbackContext, isCommand: bool = True) -> bool:
-        if not BotSettings.IsFromMember(update, context):
+        if not await BotSettings.IsFromMember(update, context):
             await update.message.reply_text("You don't have enough rights to use this command!")
             return False
         return True
