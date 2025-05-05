@@ -79,7 +79,7 @@ class CryptoCallBot:
         if not await self.CheckCaller(update, context, True):
             return
 
-        if len(context.args) < 4:
+        if len(context.args) < 6:
             await update.message.reply_text(BotSettings.EscapeMarkdownV2(f"Usage: {self.__methodDocumentation['call']}"), parse_mode=ParseMode.MARKDOWN_V2)
             return
 
@@ -136,7 +136,7 @@ class CryptoCallBot:
             if not call:
                 await update.message.reply_text(f"Call ID {callId} not found.")
                 return
-            if call.status not in (Call.Status.ACTIVE, Call.Status.ACQUIRING):
+            if call.status == database.CryptoCall.Status.CLOSED:
                 await update.message.reply_text(f"Call ID {callId} is not active.")
                 return
 
