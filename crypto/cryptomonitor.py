@@ -217,6 +217,7 @@ Contract      {str(self.contractAddress)}
 Pair          {str(self.pair)}
 Exchange      {str(self.exchange)}
 Status        {status}
+Created At    {str(self.__dbCall.createdAt)}
 Entry Price   {self.sign} {DecimalToString(self.entryPrice)}
 Stop Loss     {self.sign} {DecimalToString(self.stopLoss)} {stopLossPercentage:.2f}%
 Investment    {self.sign} {DecimalToString(self.investment)}
